@@ -4,6 +4,9 @@
 #include "stack.h"
 #include "slice.h"
 
+#include <string>
+#include <vector>
+#include <map>
 #include <string.h>
 
 namespace jsonutil {
@@ -47,7 +50,9 @@ class Value {
  public:
   Value(): type_(kJSON_NULL), val_({{NULL, 0}}) {
   }
- 
+  explicit Value(ValueType t): type_(t), val_({{NULL, 0}}) {
+  }
+
   Value(const Value& rhs);
   const Value& operator=(const Value&);
   ~Value();
@@ -83,12 +88,12 @@ class Value {
   bool SetObjectKeyValue(const char* k, int len, Value* v);
   void MergeObjectBuilder(Builder<Member>& b);
 
-  void Reset();
+  void Reset(ValueType t = kJSON_NULL);
   ValueType Type() const { return type_; }
   /* Returned string should be freed by caller. */ 
   /* Returned string is null-terminated. */
   char* ToString(int* len = NULL);
-
+  
  private:
   void Free();
   void FreeOnError(Stack& s);
@@ -161,5 +166,93 @@ class Builder {
  private:
   Stack stk_;
 };
+
+Value& Serialize(Value& v, double num);
+Value& Serialize(Value& v, const std::string& s);
+void DeSerialize(const Value& v, double& num);
+void DeSerialize(const Value& v, std::string& num);
+template <typename T>
+Value& Serialize(Value& v, const T& data);
+template <typename T>
+void DeSerialize(const Value& v, T& data);
+template <typename T>
+Value& Serialize(Value& v, const std::vector<T>& a);
+template <typename T>
+Value& Serialize(Value& v, const std::map<std::string, T>& m);
+template <typename T>
+void DeSerialize(const Value& v, std::vector<T>& a);
+template <typename T>
+void DeSerialize(const Value& v, std::map<std::string, T>& m);
+
+template <typename T>
+Value& Serialize(Value& v, const T& data) {
+  return Serialize(v, data);
+}
+
+template <typename T>
+void DeSerialize(const Value& v, T& data) {
+  DeSerialize(v, data);
+}
+
+template <typename T>
+Value& Serialize(Value& v, const std::vector<T>& a) {
+  v.Reset(kJSON_ARRAY);
+  int size = a.size();
+  if (size == 0) return v;
+  Builder<Value> batch;
+  for (int i = 0; i < size; ++i) {
+    Value elem;
+    Serialize<T>(elem, a[i]);
+    batch.Add(elem);
+  }
+  v.MergeArrayBuilder(batch);
+  return v;
+}
+
+template <typename T>
+Value& Serialize(Value& v, const std::map<std::string, T>& m) {
+  v.Reset(kJSON_OBJECT);
+  int size = m.size();
+  if (size == 0) return v;
+  Builder<Member> batch;
+  for (typename std::map<std::string, T>::const_iterator 
+    it = m.cbegin(); it != m.cend(); ++it) {
+    Member elem;
+    Value val;
+    Serialize<T>(val, it->second);
+    elem.Set((it->first).c_str(), (it->first).size(), &val);
+    batch.Add(elem);
+  }
+  v.MergeObjectBuilder(batch);
+  return v;
+}
+
+template <typename T>
+void DeSerialize(const Value& v, std::vector<T>& a) {
+  assert(v.Type() == kJSON_ARRAY);
+  int size = v.GetArraySize();
+  a.reserve(a.size() + size);
+  for (int i = 0; i < size; ++i) {
+    const Value* p = v.GetArrayValue(i);
+    T elem;
+    DeSerialize<T>(*p, elem);
+    a.push_back(elem);
+  }
+}
+
+template <typename T>
+void DeSerialize(const Value& v, std::map<std::string, T>& m) {
+  assert(v.Type() == kJSON_OBJECT);
+  int size = v.GetObjectSize();
+  for (int i = 0; i < size; ++i) {
+    const Member* p = v.GetObjectMember(i);
+    const char* k = p->Key();
+    int len = p->KLen();
+    T elem;
+    DeSerialize<T>(*(p->Val()), elem);
+    m[std::string(k, len)] = elem;
+  }
+}
+
 } // namespace jsonutil
 #endif // JSONUTIL_SRC_JSON_H__

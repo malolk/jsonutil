@@ -429,6 +429,27 @@ void ValueToString(Stack& stk, const Value* v) {
   }
 }
 
+inline char* CopyBytes(const char* k, int len) {
+  char* p = static_cast<char*>(malloc(len));
+  if (p) memcpy(p, k, len);
+  return p;
+}
+
+inline char* CopyWithNull(const char* k, int len) {
+  char* p = static_cast<char*>(malloc(len + 1));
+  if (p) {
+    memcpy(p, k, len);
+    p[len] = '\0';
+  }
+  return p;
+}
+
+inline void* MallocWithClear(int size) {
+  void* p = malloc(size);
+  if (p) memset(p, 0, size);
+  return p;
+}
+
 } // static-function namespace
 
 bool Compare(const Value* lhs, const Value* rhs) {
@@ -471,10 +492,8 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
     len = 0;
     ret = ParseStringInStack(stk, s, len);
     if (ret != kJSON_OK) return ret;
-    char* sp = static_cast<char*>(malloc(len));
+    char* sp = CopyWithNull(stk.Pop(len), len);
     if (sp == NULL) return kJSON_OUT_OF_MEMORY;
-    memcpy(sp, stk.Pop(len), len);
-    
     SkipSpace(s);
     if (*(s.Ptr()) != ':') {
       free(sp);
@@ -483,12 +502,11 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
     s.Move(1); // skip colon
 
     /* parse the value part */
-    Value* val = reinterpret_cast<Value*>(malloc(sizeof(Value)));
+    Value* val = reinterpret_cast<Value*>(MallocWithClear(sizeof(Value)));
     if (val == NULL) {
       free(sp);
       return kJSON_OUT_OF_MEMORY;
     }
-    memset(val, 0, sizeof(*val));
     SkipSpace(s);
     if ((ret = val->ParseValue(stk, s)) != kJSON_OK) {
       free(sp);
@@ -502,7 +520,7 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
     SkipSpace(s);
     if (*(s.Ptr()) == '}') {
       int bytes = num * sizeof(Member);
-      char* dst = static_cast<char*>(malloc(bytes));
+      char* dst = static_cast<char*>(MallocWithClear(bytes));
       if (dst == NULL) return kJSON_OUT_OF_MEMORY;
       memcpy(dst, stk.Pop(bytes), bytes);
       val_.o.m = reinterpret_cast<Member*>(dst);
@@ -583,9 +601,8 @@ Status Value::ParseArray(Stack& stk, Slice& s) {
   }
   int num = 0;
   while (true) {
-    Value* val = reinterpret_cast<Value*>(malloc(sizeof(Value)));
+    Value* val = reinterpret_cast<Value*>(MallocWithClear(sizeof(Value)));
     if (val == NULL) return kJSON_OUT_OF_MEMORY;
-    memset(val, 0, sizeof(*val));
     Status ret = val->ParseValue(stk, s);
     if (ret != kJSON_OK) {
       val->Free();
@@ -599,9 +616,8 @@ Status Value::ParseArray(Stack& stk, Slice& s) {
     p = s.Ptr();
     if (*p == ']') {
       int bytes = num * sizeof(*val);
-      char* dst = static_cast<char*>(malloc(bytes));
+      char* dst = static_cast<char*>(CopyBytes(stk.Pop(bytes), bytes));
       if (dst == NULL) return kJSON_OUT_OF_MEMORY;
-      memcpy(dst, stk.Pop(bytes), bytes);
       val_.a.a = reinterpret_cast<Value*>(dst);
       s.Move(1); // skip the ending bracket square
       break;
@@ -674,28 +690,26 @@ Value::~Value() {
 }
 
 void Value::Free() {
-  if (type_ == kJSON_STRING && val_.s.s) {
-    free(val_.s.s);
+  if (type_ == kJSON_STRING) {
+    if (val_.s.s) free(val_.s.s);
     val_.s.s = NULL;
     val_.s.len = 0;
-  } else if (type_ == kJSON_ARRAY && val_.a.a) {
+  } else if (type_ == kJSON_ARRAY) {
     int mem_size = val_.a.size;
-    assert(mem_size > 0);
     Value* p = val_.a.a;
     for (int i = 0; i < mem_size; ++i) {
       p[i].Free();
     }
-    free(p);
+    if (p) free(p);
     val_.a.a = NULL;
     val_.a.size = 0;
-  } else if (type_ == kJSON_OBJECT && val_.o.m) {
+  } else if (type_ == kJSON_OBJECT) {
     int mem_size = val_.o.size;
-    assert(mem_size > 0);
     Member* p = val_.o.m;
     for (int i = 0; i < mem_size; ++i) {
       p[i].Free();
     }
-    free(p);
+    if (p) free(p);
     val_.o.m = NULL;
     val_.o.size = 0;
   }
@@ -709,12 +723,14 @@ void Value::FreeOnError(Stack& stk) {
       for (int i = 0; i < num; ++i) {
         (p + i)->Free();
       }
+      val_.a.size = 0;
     } else if (type_ == kJSON_OBJECT) {
       Member* p = reinterpret_cast<Member*>(stk.Dump());
       num = val_.o.size;
       for (int i = 0; i < num; ++i) {
         (p + i)->Free();
       }
+      val_.o.size = 0;
     }
     stk.Free();
 }
@@ -764,14 +780,11 @@ void Value::SetBoolean(bool b) {
 }
 
 void Value::SetString(const char* s, int len) {
-  assert(s != NULL && len > 0 || s == NULL && len == 0);
   Reset();
   type_ = kJSON_STRING;
   val_.s.len = len;
-  char* p = val_.s.s = static_cast<char*>(malloc(len + 1));
+  char* p = val_.s.s = static_cast<char*>(CopyWithNull(s, len));
   assert(p != NULL);
-  memcpy(p, s, len);
-  p[len] = '\0';
 }
 
 const char* Value::GetString() const {
@@ -817,6 +830,7 @@ void Value::SetArrayValue(int index, Value* value) {
 }
 
 void Value::MergeArrayBuilder(Builder<Value>& b) {
+  assert(type_ == kJSON_ARRAY);
   int num = 0;
   const Value* p = b.Dump(num);
   if (num == 0) return;
@@ -868,6 +882,7 @@ Value* Value::GetValueByKey(const char* k, int klen) {
 }
 
 void Value::MergeObjectBuilder(Builder<Member>& b) {
+  assert(type_ == kJSON_OBJECT);
   int num = 0;
   const Member* p = b.Dump(num);
   if (num == 0) return;
@@ -896,8 +911,7 @@ void Value::SetArray(const Value* src) {
   if (src == this) return;
   Free();
   int size = src->GetArraySize();
-  Value* a = reinterpret_cast<Value*>(malloc(size * sizeof(*src)));
-  memset(a, 0, size * sizeof(*src));
+  Value* a = reinterpret_cast<Value*>(MallocWithClear(size * sizeof(*src)));
   for (int i = 0; i < size; ++i) {
     *(a + i) = *src->GetArrayValue(i);
   }
@@ -910,8 +924,7 @@ void Value::SetObject(const Value* src) {
   if (src == this) return;
   Free();
   int size = src->GetObjectSize();
-  Member* m = reinterpret_cast<Member*>(malloc(size * sizeof(Member)));
-  memset(m, 0, size * sizeof(Member));
+  Member* m = reinterpret_cast<Member*>(MallocWithClear(size * sizeof(Member)));
   for (int i = 0; i < size; ++i) {
     const Member* p = src->GetObjectMember(i);
     (m + i)->Set(p->Key(), p->KLen(), p->Val());        
@@ -920,9 +933,9 @@ void Value::SetObject(const Value* src) {
   val_.o.size = size;
 }
 
-void Value::Reset() {
+void Value::Reset(ValueType t) {
   Free();
-  type_ = kJSON_NULL;
+  type_ = t;
 }
 
 Member::Member(const Member& rhs) {
@@ -938,29 +951,31 @@ Member::~Member() {
 }
 
 void Member::Free() {
-  if (k_ && len_ > 0) {
+  if (k_) {
     free(k_);
+    k_ = NULL;
+    len_ = 0;
   }
   if (v_) {
     v_->Reset();
     free(v_);
+    v_ = NULL;
   }
 }
 
+
 void Member::Set(const char* k, int len, const Value* v) {
-  assert(k && v);
+  assert(v);
   if (k_ != k) {
     free(k_);
-    k_ = static_cast<char*>(malloc(len));
-    memcpy(k_, k, len);
+    k_ = CopyWithNull(k, len);
     len_ = len;
   }
   if (v_ != v) {
     if(v_) {
       v_->Reset(); 
     } else {
-      v_ = reinterpret_cast<Value*>(malloc(sizeof(*v)));
-      memset(v_, 0, sizeof(Value));
+      v_ = reinterpret_cast<Value*>(MallocWithClear(sizeof(*v)));
     }
     *v_ = *v;
   }
@@ -983,14 +998,33 @@ char* Value::ToString(int* len) {
   Stack stk;
   ValueToString(stk, this);
   int length = stk.Top();
-  void* ret = malloc(length + 1);
+  char* ret = CopyWithNull(stk.Pop(length), length);
   if (ret == NULL) {
     fprintf(stderr, "%s\n", "JsonToString error: out of memory!");
     return NULL;
   }
-  memcpy(ret, stk.Pop(length), length);
-  *(static_cast<char*>(ret) + length) = '\0'; // add null-terminator
   if (len) *len = length;
   return static_cast<char*>(ret);
 }
+
+Value& Serialize(Value& v, double num) {
+  v.SetNumber(num);
+  return v;
+}
+
+void DeSerialize(const Value& v, double& num) {
+  assert(v.Type() == kJSON_NUMBER);
+  num = v.GetNumber();
+}
+
+Value& Serialize(Value& v, const std::string& s) {
+  v.SetString(s.c_str(), s.size());
+  return v;
+}
+
+void DeSerialize(const Value& v, std::string& s) {
+  assert(v.Type() == kJSON_STRING);
+  s = std::string(v.GetString(), v.GetStringLength());
+}
+
 } // namespace jsonutil

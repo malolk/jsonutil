@@ -9,19 +9,25 @@
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
 using namespace jsonutil;
+using namespace std;
 
-#define TEST_EQUAL_CHECK(answer, result, fmt, func_name, line, check) \
-  do { \
-    if (!check) { \
-      fprintf(stderr, "%20s:%-10d Answer: %-20" fmt " Result: %-20" \
-              fmt ANSI_COLOR_RED " %10s" ANSI_COLOR_RESET "\n", \
-              func_name, line, answer, result, "[failed]"); \
-    } else {\
-      fprintf(stderr, "%20s:%-10d Answer: %-20" fmt " Result: %-20" \
-              fmt ANSI_COLOR_GREEN " %10s" ANSI_COLOR_RESET "\n", \
-              func_name, line, answer, result, "[passed]"); \
-    } \
+#define TEST_EQUAL_CHECK_HELPLER(answer, result, fmt, func_name, line, str, color) \
+  do {                                                                             \
+    fprintf(stderr, "%20s:%-10d Answer: %-20" fmt " Result: %-20"                  \
+            fmt color " %10s" ANSI_COLOR_RESET "\n",                               \
+            func_name, line, answer, result, str);                                 \
   } while (0)
+  
+#define TEST_EQUAL_CHECK(answer, result, fmt, func_name, line, check)              \
+  do {                                                                             \
+    if (!check) {                                                                  \
+      TEST_EQUAL_CHECK_HELPLER(                                                    \
+        answer, result, fmt, func_name, line, "[FAILED]", ANSI_COLOR_RED);         \
+    } else {                                                                       \
+      TEST_EQUAL_CHECK_HELPLER(                                                    \
+        answer, result, fmt, func_name, line, "[PASSED]", ANSI_COLOR_GREEN);       \
+    }                                                                              \
+  } while (0)                                                            
 
 #define TEST_EQUAL(answer, result, fmt) \
   TEST_EQUAL_CHECK(answer, result, fmt, __func__, __LINE__, (answer == result))
@@ -63,7 +69,7 @@ void TestParseValidNumberImpl(double num, const char* num_str, int len,
 }
 
 #define TestParseValidNumber(num, num_str) \
-    TestParseValidNumberImpl(num, num_str, strlen(num_str), __func__, __LINE__);
+    TestParseValidNumberImpl(num, num_str, strlen(num_str), __func__, __LINE__)
 
 void TestParseInvalidNumberImpl(const char* num_str, int len, 
                               const char* func, int line) {
@@ -73,7 +79,7 @@ void TestParseInvalidNumberImpl(const char* num_str, int len,
 }
 
 #define TestParseInvalidNumber(num_str) \
-  TestParseInvalidNumberImpl(num_str, strlen(num_str), __func__, __LINE__);
+  TestParseInvalidNumberImpl(num_str, strlen(num_str), __func__, __LINE__)
 
 void TestParseNumber() {
   /* test valid number */
@@ -261,7 +267,8 @@ void TestParseArray() {
 }
 
 Status ParseImpl(Value& val, const char* text) {
-  return val.Parse(text, strlen(text));
+  int len = strlen(text);
+  return val.Parse(text, len);
 }
 
 void TestParseObject() {
@@ -328,10 +335,9 @@ void TestParseObject() {
   vb.Reset();
   vc.Reset();
   obj.Reset();
-
   /* test invalid object */
-  Value val0;
   
+  Value val0;
   TEST_EQUAL(kJSON_PARSE_OBJECT_MISSING_KEY, ParseImpl(val0, "{,}"), "d");
   TEST_EQUAL(kJSON_PARSE_OBJECT_MISSING_KEY, ParseImpl(val0, "{,null}"), "d");
   TEST_EQUAL(kJSON_PARSE_OBJECT_MISSING_KEY, ParseImpl(val0, "{123}"), "d");
@@ -366,7 +372,119 @@ void TestJsonStringify() {
   TEST_JSON_STRINGIFY("{\"abc\" : 123, \"def\" : null}");
 }
 
-void TestParse() {
+bool CompareElem(const string& s, const Value* v) {
+  return s.compare(string(v->GetString(), v->GetStringLength())) == 0;
+}
+
+bool CompareElem(double num, const Value* v) {
+  return num == v->GetNumber();
+}
+
+#define TestSerializeVectorAux(v, vec, func, line)   \
+  do {                                               \
+    TEST_EQUAL(kJSON_ARRAY, v.Type(), "d");          \
+    TEST_EQUAL(vec.size(), v.GetArraySize(), "d");   \
+    for (int i = 0; i < vec.size(); ++i) {           \
+      Value* p = v.GetArrayValue(i);                 \
+      TEST_EQUAL_CHECK("-", "-", "s",                \
+        func, line, CompareElem(vec[i], p));         \
+    }                                                \
+  } while (0)
+
+void TestSerializeVectorImpl(vector<double>& vec, const char* func, int line) {
+  Value v;
+  Serialize<double>(v, vec);
+  TestSerializeVectorAux(v, vec, func, line);
+  vector<double> ret;
+  DeSerialize<double>(v, ret);
+  TestSerializeVectorAux(v, ret, func, line);
+}
+
+void TestSerializeVectorImpl(vector<string>& vec, const char* func, int line) {
+  Value v;
+  Serialize<string>(v, vec);
+  TestSerializeVectorAux(v, vec, func, line);
+  vector<string> ret;
+  DeSerialize<string>(v, ret);
+  TestSerializeVectorAux(v, ret, func, line);
+}
+
+#define TestSerializeMapAux(v, m, func, line)           \
+  do {                                                  \
+    TEST_EQUAL(kJSON_OBJECT, v.Type(), "d");            \
+    TEST_EQUAL(m.size(), v.GetObjectSize(), "d");       \
+    for (int i = 0; i < m.size(); ++i) {                \
+      const Member* p = v.GetObjectMember(i);           \
+      string key = string(p->Key(), p->KLen());          \
+      TEST_EQUAL_CHECK("-", "-", "s", func, line,       \
+        m.count(key) && CompareElem(m[key], p->Val())); \
+    }                                                   \
+  } while (0)
+
+void TestSerializeMapImpl(map<string, double>& m, const char* func, int line) {
+  Value v;
+  Serialize<double>(v, m);
+  TestSerializeMapAux(v, m, func, line);
+  map<string, double> ret;
+  DeSerialize<double>(v, ret);
+  TestSerializeMapAux(v, ret, func, line);
+}
+
+void TestSerializeMapImpl(map<string, string>& m, const char* func, int line) {
+  Value v;
+  Serialize<string>(v, m);
+  TestSerializeMapAux(v, m, func, line);
+  map<string, string> ret;
+  DeSerialize<string>(v, ret);
+  TestSerializeMapAux(v, ret, func, line);
+}
+
+void TestSerializeBuiltinImpl(double num, const char* func, int line) {
+  Value v;
+  Serialize<double>(v, num);
+  TEST_EQUAL_CHECK("-", "-", "s", func, line, CompareElem(num, &v));
+  double ret = 0;
+  DeSerialize<double>(v, ret);
+  TEST_EQUAL_CHECK("-", "-", "s", func, line, ret == num);
+}
+
+void TestSerializeBuiltinImpl(const string& data, const char* func, int line) {
+  Value v;
+  Serialize<string>(v, data);
+  TEST_EQUAL_CHECK("-", "-", "s", func, line, CompareElem(data, &v));
+  string ret;
+  DeSerialize<string>(v, ret);
+  TEST_EQUAL_CHECK("-", "-", "s", func, line, ret.compare(data) == 0);
+}
+
+#define TestSerializeVector(vec)                    \
+  TestSerializeVectorImpl(vec, __func__, __LINE__)
+#define TestSerializeMap(m)                         \
+  TestSerializeMapImpl(m, __func__, __LINE__)
+#define TestSerializeBuiltin(data)                  \
+  TestSerializeBuiltinImpl(data, __func__, __LINE__)
+
+void TestSerialize() {
+  TestSerializeBuiltin(10.0);
+  TestSerializeBuiltin(string(""));
+  TestSerializeBuiltin(string("deadbeef"));
+
+  vector<double> iv = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+  vector<string> sv = {"", " ", "abc", "def", "ghi"};
+  TestSerializeVector(iv); 
+  TestSerializeVector(sv); 
+
+  map<string, double> sdm = {
+    {"", 0}, {" ", 1}, {"abc", 2}, {"def", 3}, {"ghi", 4}
+  };
+  TestSerializeMap(sdm);
+  map<string, string> ssm = {
+    {"", "0"}, {" ", "1"}, {"abc", "2"}, {"def", "3"}, {"ghi", "4"}
+  };
+  TestSerializeMap(ssm);
+}
+
+void Test() {
   TestParseNull();
   TestParseFalse();
   TestParseTrue();
@@ -377,9 +495,10 @@ void TestParse() {
   TestParseArray();
   TestParseObject();
   TestJsonStringify();
+  TestSerialize();
 }
 
 int main() {
-  TestParse();
+  Test();
 }
 
