@@ -829,6 +829,7 @@ void Value::SetArrayValue(int index, Value* value) {
   *v = *value;
 }
 
+/*TODO: Omit the realloc when the array is empty. */
 void Value::MergeArrayBuilder(Builder<Value>& b) {
   assert(type_ == kJSON_ARRAY);
   int num = 0;
@@ -963,14 +964,17 @@ void Member::Free() {
   }
 }
 
-
-void Member::Set(const char* k, int len, const Value* v) {
-  assert(v);
+void Member::SetKey(const char* k, int len) {
+  assert(k);
   if (k_ != k) {
     free(k_);
     k_ = CopyWithNull(k, len);
     len_ = len;
   }
+}
+
+void Member::SetValue(const Value* v) {
+  assert(v);
   if (v_ != v) {
     if(v_) {
       v_->Reset(); 
@@ -981,17 +985,31 @@ void Member::Set(const char* k, int len, const Value* v) {
   }
 }
 
-void Member::Move(const char* k, int len, const Value* v) {
-  assert(k && v);
+void Member::Set(const char* k, int len, const Value* v) {
+  SetKey(k, len);
+  SetValue(v);
+}
+
+void Member::MoveKey(const char* k, int len) {
+  assert(k);
   if (k_ != k) {
     free(k_);
     k_ = const_cast<char*>(k);
     len_ = len;
   }
+}
+
+void Member::MoveValue(const Value* v) {
+  assert(v);
   if (v_ != v) {
     if(v_) v_->Reset(); 
     v_ = const_cast<Value*>(v);
   }
+}
+
+void Member::Move(const char* k, int len, const Value* v) {
+  MoveKey(k, len);
+  MoveValue(v);
 }
 
 char* Value::ToString(int* len) {
@@ -1007,24 +1025,34 @@ char* Value::ToString(int* len) {
   return static_cast<char*>(ret);
 }
 
-Value& Serialize(Value& v, double num) {
+Value& operator<<(Value& v, double num) {
   v.SetNumber(num);
   return v;
 }
 
-void DeSerialize(const Value& v, double& num) {
-  assert(v.Type() == kJSON_NUMBER);
-  num = v.GetNumber();
-}
-
-Value& Serialize(Value& v, const std::string& s) {
+Value& operator<<(Value& v, const std::string& s) {
   v.SetString(s.c_str(), s.size());
   return v;
 }
 
-void DeSerialize(const Value& v, std::string& s) {
+void operator>>(const Value& v, double& num) {
+  assert(v.Type() == kJSON_NUMBER);
+  num = v.GetNumber();
+}
+
+void operator>>(const Value& v, std::string& s) {
   assert(v.Type() == kJSON_STRING);
   s = std::string(v.GetString(), v.GetStringLength());
 }
 
+Builder<Value>& operator<<(Builder<Value>& b, const Value& data) {
+  Value* p = b.Push();
+  p->Reset();
+  *p = data;
+}
+
+Builder<Member>& operator<<(Builder<Member>& b, const Member& data) {
+  Member* p = b.Push();
+  p->Set(data.Key(), data.KLen(), data.Val());
+}
 } // namespace jsonutil

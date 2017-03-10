@@ -248,8 +248,8 @@ void TestParseArray() {
   TestParseValueValid(val.GetArrayValue(1), val.GetArrayValue(2));
 
   Builder<Value> store;
-  store.Add(ary1);
-  store.Add(str_val);
+  store << ary1;
+  store << str_val;
   val.MergeArrayBuilder(store);
   TEST_EQUAL(5, val.GetArraySize(), "d");
   TestParseValueValid(val.GetArrayValue(3), &ary1);
@@ -301,8 +301,8 @@ void TestParseObject() {
   Member b0, b1;
   b0.Set("aa", 2, &va);
   b1.Set("ab", 2, &vb);
-  store.Add(b0);
-  store.Add(b1);
+  store << b0;
+  store << b1;
   obj.MergeObjectBuilder(store);
   TEST_EQUAL(5, obj.GetObjectSize(), "d");
   mem1 = obj.GetObjectMember(1);
@@ -393,19 +393,19 @@ bool CompareElem(double num, const Value* v) {
 
 void TestSerializeVectorImpl(vector<double>& vec, const char* func, int line) {
   Value v;
-  Serialize<double>(v, vec);
+  v << vec;
   TestSerializeVectorAux(v, vec, func, line);
   vector<double> ret;
-  DeSerialize<double>(v, ret);
+  v >> ret;
   TestSerializeVectorAux(v, ret, func, line);
 }
 
 void TestSerializeVectorImpl(vector<string>& vec, const char* func, int line) {
   Value v;
-  Serialize<string>(v, vec);
+  v << vec;
   TestSerializeVectorAux(v, vec, func, line);
   vector<string> ret;
-  DeSerialize<string>(v, ret);
+  v >> ret;
   TestSerializeVectorAux(v, ret, func, line);
 }
 
@@ -423,37 +423,37 @@ void TestSerializeVectorImpl(vector<string>& vec, const char* func, int line) {
 
 void TestSerializeMapImpl(map<string, double>& m, const char* func, int line) {
   Value v;
-  Serialize<double>(v, m);
+  v << m;
   TestSerializeMapAux(v, m, func, line);
   map<string, double> ret;
-  DeSerialize<double>(v, ret);
+  v >> ret;
   TestSerializeMapAux(v, ret, func, line);
 }
 
 void TestSerializeMapImpl(map<string, string>& m, const char* func, int line) {
   Value v;
-  Serialize<string>(v, m);
+  v << m;
   TestSerializeMapAux(v, m, func, line);
   map<string, string> ret;
-  DeSerialize<string>(v, ret);
+  v >> ret;
   TestSerializeMapAux(v, ret, func, line);
 }
 
 void TestSerializeBuiltinImpl(double num, const char* func, int line) {
   Value v;
-  Serialize<double>(v, num);
+  v << num;
   TEST_EQUAL_CHECK("-", "-", "s", func, line, CompareElem(num, &v));
   double ret = 0;
-  DeSerialize<double>(v, ret);
+  v >> ret;
   TEST_EQUAL_CHECK("-", "-", "s", func, line, ret == num);
 }
 
 void TestSerializeBuiltinImpl(const string& data, const char* func, int line) {
   Value v;
-  Serialize<string>(v, data);
+  v << data;
   TEST_EQUAL_CHECK("-", "-", "s", func, line, CompareElem(data, &v));
   string ret;
-  DeSerialize<string>(v, ret);
+  v >> ret;
   TEST_EQUAL_CHECK("-", "-", "s", func, line, ret.compare(data) == 0);
 }
 
@@ -468,7 +468,6 @@ void TestSerialize() {
   TestSerializeBuiltin(10.0);
   TestSerializeBuiltin(string(""));
   TestSerializeBuiltin(string("deadbeef"));
-
   vector<double> iv = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
   vector<string> sv = {"", " ", "abc", "def", "ghi"};
   TestSerializeVector(iv); 

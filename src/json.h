@@ -94,6 +94,20 @@ class Value {
   /* Returned string is null-terminated. */
   char* ToString(int* len = NULL);
   
+  friend Value& operator<<(Value& v, double num);
+  friend Value& operator<<(Value& v, const std::string& s);
+  template <typename T>
+  friend Value& operator<<(Value& v, const std::vector<T>& a);
+  template <typename T>
+  friend Value& operator<<(Value& v, const std::map<std::string, T>& m);
+
+  friend void operator>>(const Value& v, double& num);
+  friend void operator>>(const Value& v, std::string& s);
+  template <typename T>
+  friend void operator>>(const Value& v, std::vector<T>& a);
+  template <typename T>
+  friend void operator>>(const Value& v, std::map<std::string, T>& m);
+
  private:
   void Free();
   void FreeOnError(Stack& s);
@@ -137,8 +151,12 @@ class Member {
   int KLen() const { return len_; }
   Value* Val() { return v_; }
   const Value* Val() const { return v_; }
+  void SetKey(const char* k, int len);
+  void SetValue(const Value* v);
   void Set(const char* k, int len, const Value* v);
   /* Move the ownership of key-value to this object. */
+  void MoveKey(const char* k, int len);
+  void MoveValue(const Value* v);
   void Move(const char* k, int len, const Value* v);
   void Free();
  private:
@@ -152,96 +170,100 @@ class Builder {
  public:
   Builder() {
   }
-  void Add(T& elem) {
+
+  T* Push() {
     T* p = reinterpret_cast<T*>(stk_.Push(sizeof(T)));
     memset(p, 0, sizeof(T));
-    *p = elem;
+    return p;
   }
+
   T* Dump(int& num) {
     assert(stk_.Top() % sizeof(T) == 0);
     num = stk_.Top() / sizeof(T);
     return reinterpret_cast<T*>(stk_.Pop(stk_.Top()));
   }
+
+  // pack into Array in Value
+  friend Builder<Value>& operator<<(Builder<Value>& b, const Value& data);
+
+  friend Builder<Member>& operator<<(Builder<Member>& b, const Member& data);
+  // pack into Array from number, string, vector, map
+  template<typename U>
+  friend Builder<Value>& operator<<(Builder<Value>& b, const U& data);
+
   /* Default copy constructor, assign-operator and destructor is ok. */
  private:
   Stack stk_;
 };
 
-Value& Serialize(Value& v, double num);
-Value& Serialize(Value& v, const std::string& s);
-void DeSerialize(const Value& v, double& num);
-void DeSerialize(const Value& v, std::string& num);
+Value& operator<<(Value& v, double num);
+Value& operator<<(Value& v, const std::string& s);
 template <typename T>
-Value& Serialize(Value& v, const T& data);
+Value& operator<<(Value& v, const std::vector<T>& a);
 template <typename T>
-void DeSerialize(const Value& v, T& data);
-template <typename T>
-Value& Serialize(Value& v, const std::vector<T>& a);
-template <typename T>
-Value& Serialize(Value& v, const std::map<std::string, T>& m);
-template <typename T>
-void DeSerialize(const Value& v, std::vector<T>& a);
-template <typename T>
-void DeSerialize(const Value& v, std::map<std::string, T>& m);
+Value& operator<<(Value& v, const std::map<std::string, T>& m);
 
+void operator>>(const Value& v, double& num);
+void operator>>(const Value& v, std::string& s);
 template <typename T>
-Value& Serialize(Value& v, const T& data) {
-  return Serialize(v, data);
+void operator>>(const Value& v, std::vector<T>& a);
+template <typename T>
+void operator>>(const Value& v, std::map<std::string, T>& m);
+
+
+template<typename T>
+Builder<Value>& operator<<(Builder<Value>& b, const T& data) {
+  Value* p = b.Push();
+  p->Reset();
+  (*p) << data; 
 }
 
 template <typename T>
-void DeSerialize(const Value& v, T& data) {
-  DeSerialize(v, data);
-}
-
-template <typename T>
-Value& Serialize(Value& v, const std::vector<T>& a) {
+Value& operator<<(Value& v, const std::vector<T>& a) {
   v.Reset(kJSON_ARRAY);
   int size = a.size();
   if (size == 0) return v;
   Builder<Value> batch;
   for (int i = 0; i < size; ++i) {
-    Value elem;
-    Serialize<T>(elem, a[i]);
-    batch.Add(elem);
+    batch << a[i];
   }
   v.MergeArrayBuilder(batch);
   return v;
 }
 
 template <typename T>
-Value& Serialize(Value& v, const std::map<std::string, T>& m) {
+Value& operator<<(Value& v, const std::map<std::string, T>& m) {
   v.Reset(kJSON_OBJECT);
   int size = m.size();
   if (size == 0) return v;
   Builder<Member> batch;
   for (typename std::map<std::string, T>::const_iterator 
     it = m.cbegin(); it != m.cend(); ++it) {
-    Member elem;
-    Value val;
-    Serialize<T>(val, it->second);
-    elem.Set((it->first).c_str(), (it->first).size(), &val);
-    batch.Add(elem);
+    Member* p = batch.Push();
+    Value* vp = reinterpret_cast<Value*>(calloc(sizeof(v), 1));
+    (*vp) << (it->second);
+    p->SetKey((it->first).c_str(), (it->first).size());
+    p->MoveValue(vp);
   }
   v.MergeObjectBuilder(batch);
   return v;
 }
 
 template <typename T>
-void DeSerialize(const Value& v, std::vector<T>& a) {
+void operator>>(const Value& v, std::vector<T>& a) {
   assert(v.Type() == kJSON_ARRAY);
   int size = v.GetArraySize();
   a.reserve(a.size() + size);
   for (int i = 0; i < size; ++i) {
     const Value* p = v.GetArrayValue(i);
     T elem;
-    DeSerialize<T>(*p, elem);
+    (*p) >> elem;
     a.push_back(elem);
   }
 }
 
 template <typename T>
-void DeSerialize(const Value& v, std::map<std::string, T>& m) {
+void operator>>(const Value& v, std::map<std::string, T>& m) {
   assert(v.Type() == kJSON_OBJECT);
   int size = v.GetObjectSize();
   for (int i = 0; i < size; ++i) {
@@ -249,7 +271,7 @@ void DeSerialize(const Value& v, std::map<std::string, T>& m) {
     const char* k = p->Key();
     int len = p->KLen();
     T elem;
-    DeSerialize<T>(*(p->Val()), elem);
+    (*(p->Val())) >> elem;
     m[std::string(k, len)] = elem;
   }
 }
