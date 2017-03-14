@@ -1029,7 +1029,7 @@ std::string Value::ToString() {
   Stack stk;
   ValueToString(stk, this);
   int len = stk.Top();
-  return std::string(stk.Pop(len), len);
+  return (std::string(stk.Pop(len), len)).append(1, '\0');
 }
 
 Value& operator<<(Value& v, double num) {
