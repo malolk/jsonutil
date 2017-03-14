@@ -1025,6 +1025,13 @@ char* Value::ToString(int* len) {
   return static_cast<char*>(ret);
 }
 
+std::string Value::ToString() {
+  Stack stk;
+  ValueToString(stk, this);
+  int len = stk.Top();
+  return std::string(stk.Pop(len), len);
+}
+
 Value& operator<<(Value& v, double num) {
   v.SetNumber(num);
   return v;

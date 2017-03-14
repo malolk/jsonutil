@@ -352,7 +352,11 @@ void TestParseObject() {
 void TestJsonStringifyImpl(const char* s, const char* func, int line) {
   Value ans, res;
   ans.Parse(s, strlen(s));
-  char* new_s = ans.ToString(NULL);
+  int len = 0;
+  char* new_s = ans.ToString(&len);
+  std::string new_ss = ans.ToString();
+  TEST_EQUAL_CHECK("-", "-", "s", func, line, new_ss.compare(new_s) == 0);
+
   ParseImpl(res, new_s);
   TEST_EQUAL_CHECK("-", "-", "s", func, line, Compare(&ans, &res));
   free(new_s);

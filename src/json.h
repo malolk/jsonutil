@@ -92,7 +92,8 @@ class Value {
   ValueType Type() const { return type_; }
   /* Returned string should be freed by caller. */ 
   /* Returned string is null-terminated. */
-  char* ToString(int* len = NULL);
+  char* ToString(int* len);
+  std::string ToString();
   
   friend Value& operator<<(Value& v, double num);
   friend Value& operator<<(Value& v, const std::string& s);
