@@ -88,16 +88,17 @@ const char* IsInvalidNumber(Slice& s) {
 }
 
 Status TranslateHex(Slice& s, uint16_t& buf) {
+#pragma GCC diagnostic ignored "-Wconversion"
   if (s.Len() < 4) return kJSON_PARSE_STRING_UNICODE_INVALID_HEX;
   buf = 0;
   for (int i = 0; i < 4; ++i) {
     char chr = *s.Ptr();
     if (chr >= '0' && chr <= '9') {
-      chr = chr - '0';
+      chr = (chr - '0');
     } else if (chr >= 'a' && chr <= 'f') {
-      chr = chr - 'a' + 10;
+      chr = (chr - 'a' + 10);
     } else if (chr >= 'A' && chr <= 'F') {
-      chr = chr - 'A' + 10;
+      chr = (chr - 'A' + 10);
     } else {
       return kJSON_PARSE_STRING_UNICODE_INVALID_HEX;
     }
@@ -105,6 +106,7 @@ Status TranslateHex(Slice& s, uint16_t& buf) {
     buf |= 0x0F & chr;
     s.Move(1);
   }  
+#pragma GCC diagnostic error "-Wconversion"
   return kJSON_OK;
 }
 
@@ -324,22 +326,22 @@ void NumberToString(Stack& stk, const Value* v) {
 
 uint32_t DecodeUTF8(const char* p, int* bytes) {
   uint32_t codepoint = 0;
-  if (*p & 0xF8 == 0xF0) {
-    assert(p[1] & 0xC0 == 0x80 && p[2] & 0xC0 == 0x80);
-    assert(p[3] & 0xC0 == 0x80);
+  if ((*p & 0xF8) == 0xF0) {
+    assert((p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80);
+    assert((p[3] & 0xC0) == 0x80);
     *bytes = 4;
     codepoint =  p[3] & 0x3F;
     codepoint |= (p[2] & 0x3F) <<  6;
     codepoint |= (p[1] & 0x3F) << 12;
     codepoint |= (p[0] & 0x07) << 18;
-  } else if (*p & 0xF0 == 0xE0) {
-    assert(p[1] & 0xC0 == 0x80 && p[2] & 0xC0 == 0x80); 
+  } else if ((*p & 0xF0) == 0xE0) {
+    assert((p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80); 
     *bytes = 3;
     codepoint =  p[2] & 0x3F;
     codepoint |= (p[1] & 0x3F) <<  6;
     codepoint |= (p[0] & 0x0F) << 12;             
-  } else if (*p & 0xE0 == 0xC0) {
-    assert(p[1] & 0xC0 == 0x80); 
+  } else if ((*p & 0xE0) == 0xC0) {
+    assert((p[1] & 0xC0) == 0x80); 
     *bytes = 2;
     codepoint =  p[1] & 0x3F;
     codepoint |= (p[0] & 0x1F) <<  6;    
@@ -375,9 +377,11 @@ void StringToString(Stack& stk, const Value* v) {
                      stk.PushHex(codepoint & 0xFFFF);
                    } else {
                      // extract surrogate pair;
-                     uint16_t high = ((codepoint - 0x10000) >> 10);
-                     uint16_t low =  (codepoint - 0x10000 - (high << 10)) + 0xDC00;
-                     high += 0xD800;
+#pragma GCC diagnostic ignored "-Wconversion"
+                     uint16_t high = static_cast<uint16_t>(((codepoint - 0x10000) >> 10));
+                     uint16_t low =  static_cast<uint16_t>((codepoint - 0x10000 - (high << 10)) + 0xDC00);
+                     high += static_cast<uint16_t>(0xD800);
+#pragma GCC diagnostic error "-Wconversion"
                      stk.PushHex(high);
                      stk.PushHex(low);
                    }
@@ -519,7 +523,9 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
     val_.o.size = ++num;
     SkipSpace(s);
     if (*(s.Ptr()) == '}') {
+#pragma GCC diagnostic ignored "-Wconversion"
       int bytes = num * sizeof(Member);
+#pragma GCC diagnostic error "-Wconversion"
       char* dst = static_cast<char*>(MallocWithClear(bytes));
       if (dst == NULL) return kJSON_OUT_OF_MEMORY;
       memcpy(dst, stk.Pop(bytes), bytes);
@@ -615,7 +621,7 @@ Status Value::ParseArray(Stack& stk, Slice& s) {
     SkipSpace(s);
     p = s.Ptr();
     if (*p == ']') {
-      int bytes = num * sizeof(*val);
+      int bytes = num * static_cast<int>(sizeof(*val));
       char* dst = static_cast<char*>(CopyBytes(stk.Pop(bytes), bytes));
       if (dst == NULL) return kJSON_OUT_OF_MEMORY;
       val_.a.a = reinterpret_cast<Value*>(dst);
@@ -659,7 +665,7 @@ Status Value::ParseNumber(Slice& s) {
   return ret;
 }
 
-Value::Value(const Value& rhs): type_(kJSON_NULL), val_({{NULL, 0}}) {
+Value::Value(const Value& rhs): val_({{NULL, 0}}), type_(kJSON_NULL) {
   *this = rhs;  
 }
 
@@ -785,6 +791,7 @@ void Value::SetString(const char* s, int len) {
   val_.s.len = len;
   char* p = val_.s.s = static_cast<char*>(CopyWithNull(s, len));
   assert(p != NULL);
+  (void)p;
 }
 
 const char* Value::GetString() const {
@@ -823,8 +830,7 @@ Value* Value::GetArrayValue(int index) {
 
 void Value::SetArrayValue(int index, Value* value) {
   assert(type_ == kJSON_ARRAY && value);
-  int size = val_.a.size;
-  assert(index >= 0 && index < size);
+  assert(index >= 0 && index < val_.a.size);
   Value* v = val_.a.a + index;
   *v = *value;
 }
@@ -912,7 +918,9 @@ void Value::SetArray(const Value* src) {
   if (src == this) return;
   Free();
   int size = src->GetArraySize();
+#pragma GCC diagnostic ignored "-Wconversion"
   Value* a = reinterpret_cast<Value*>(MallocWithClear(size * sizeof(*src)));
+#pragma GCC diagnostic error "-Wconversion"
   for (int i = 0; i < size; ++i) {
     *(a + i) = *src->GetArrayValue(i);
   }
@@ -925,7 +933,9 @@ void Value::SetObject(const Value* src) {
   if (src == this) return;
   Free();
   int size = src->GetObjectSize();
+#pragma GCC diagnostic ignored "-Wconversion"
   Member* m = reinterpret_cast<Member*>(MallocWithClear(size * sizeof(Member)));
+#pragma GCC diagnostic error "-Wconversion"
   for (int i = 0; i < size; ++i) {
     const Member* p = src->GetObjectMember(i);
     (m + i)->Set(p->Key(), p->KLen(), p->Val());        
@@ -945,6 +955,7 @@ Member::Member(const Member& rhs) {
 
 const Member& Member::operator=(const Member& rhs) {
   Set(rhs.Key(), rhs.KLen(), rhs.Val());
+  return *this;
 }
 
 Member::~Member() {
@@ -1012,19 +1023,6 @@ void Member::Move(const char* k, int len, const Value* v) {
   MoveValue(v);
 }
 
-char* Value::ToString(int* len) {
-  Stack stk;
-  ValueToString(stk, this);
-  int length = stk.Top();
-  char* ret = CopyWithNull(stk.Pop(length), length);
-  if (ret == NULL) {
-    fprintf(stderr, "%s\n", "JsonToString error: out of memory!");
-    return NULL;
-  }
-  if (len) *len = length;
-  return static_cast<char*>(ret);
-}
-
 std::string Value::ToString() {
   Stack stk;
   ValueToString(stk, this);
@@ -1038,7 +1036,7 @@ Value& operator<<(Value& v, double num) {
 }
 
 Value& operator<<(Value& v, const std::string& s) {
-  v.SetString(s.c_str(), s.size());
+  v.SetString(s.c_str(), static_cast<int>(s.size()));
   return v;
 }
 

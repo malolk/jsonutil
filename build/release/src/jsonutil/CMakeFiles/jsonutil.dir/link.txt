@@ -1,0 +1,2 @@
+/usr/bin/ar cr libjsonutil.a  CMakeFiles/jsonutil.dir/stack.cc.o CMakeFiles/jsonutil.dir/json.cc.o CMakeFiles/jsonutil.dir/slice.cc.o
+/usr/bin/ranlib libjsonutil.a

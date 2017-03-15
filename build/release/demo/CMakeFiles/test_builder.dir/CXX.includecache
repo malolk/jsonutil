@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../../src/jsonutil/json.h
+stack.h
+../../src/jsonutil/stack.h
+slice.h
+../../src/jsonutil/slice.h
+string
+-
+vector
+-
+map
+-
+string.h
+-
+
+../../src/jsonutil/slice.h
+stdio.h
+-
+stdlib.h
+-
+assert.h
+-
+
+../../src/jsonutil/stack.h
+stdint.h
+-
+stddef.h
+-
+
+/home/malolk/zoo/jsonutil/demo/test_builder.cc
+jsonutil/json.h
+/home/malolk/zoo/jsonutil/demo/jsonutil/json.h
+iostream
+-
+string
+-
+

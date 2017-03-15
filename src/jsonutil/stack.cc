@@ -41,7 +41,7 @@ void Stack::PushUint32(uint32_t u, int bytes) {
   assert(bytes >= 0 && bytes <= 4);
   char* dst = Push(bytes);
   while (--bytes >= 0) {
-    *dst++ = (u >> (8 * bytes)) & 0xFF;  // big endian
+    *dst++ = static_cast<char>((u >> (8 * bytes)) & 0xFF);  // big endian
   }
 }
 

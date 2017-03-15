@@ -48,9 +48,9 @@ class Builder;
 
 class Value {
  public:
-  Value(): type_(kJSON_NULL), val_({{NULL, 0}}) {
+  Value(): val_({{NULL, 0}}), type_(kJSON_NULL) {
   }
-  explicit Value(ValueType t): type_(t), val_({{NULL, 0}}) {
+  explicit Value(ValueType t): val_({{NULL, 0}}), type_(t) {
   }
 
   Value(const Value& rhs);
@@ -90,9 +90,6 @@ class Value {
 
   void Reset(ValueType t = kJSON_NULL);
   ValueType Type() const { return type_; }
-  /* Returned string should be freed by caller. */ 
-  /* Returned string is null-terminated. */
-  char* ToString(int* len);
   std::string ToString();
   
   friend Value& operator<<(Value& v, double num);
@@ -180,7 +177,7 @@ class Builder {
 
   T* Dump(int& num) {
     assert(stk_.Top() % sizeof(T) == 0);
-    num = stk_.Top() / sizeof(T);
+    num = static_cast<int>(stk_.Top() / sizeof(T));
     return reinterpret_cast<T*>(stk_.Pop(stk_.Top()));
   }
 
@@ -223,7 +220,7 @@ Builder<Value>& operator<<(Builder<Value>& b, const T& data) {
 template <typename T>
 Value& operator<<(Value& v, const std::vector<T>& a) {
   v.Reset(kJSON_ARRAY);
-  int size = a.size();
+  int size = static_cast<int>(a.size());
   if (size == 0) return v;
   Builder<Value> batch;
   for (int i = 0; i < size; ++i) {
@@ -236,7 +233,7 @@ Value& operator<<(Value& v, const std::vector<T>& a) {
 template <typename T>
 Value& operator<<(Value& v, const std::map<std::string, T>& m) {
   v.Reset(kJSON_OBJECT);
-  int size = m.size();
+  int size = static_cast<int>(m.size());
   if (size == 0) return v;
   Builder<Member> batch;
   for (typename std::map<std::string, T>::const_iterator 
@@ -244,7 +241,7 @@ Value& operator<<(Value& v, const std::map<std::string, T>& m) {
     Member* p = batch.Push();
     Value* vp = reinterpret_cast<Value*>(calloc(sizeof(v), 1));
     (*vp) << (it->second);
-    p->SetKey((it->first).c_str(), (it->first).size());
+    p->SetKey((it->first).c_str(), static_cast<int>((it->first).size()));
     p->MoveValue(vp);
   }
   v.MergeObjectBuilder(batch);

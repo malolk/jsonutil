@@ -1,0 +1,1 @@
+g++   -g -Wall -Wextra -Werror -Wconversion -Wno-unused-parameter -Wold-style-cast -Woverloaded-virtual -Wpointer-arith -Wshadow -Wwrite-strings -march=native -std=c++0x -pthread -rdynamic -O2 -finline-limit=1000 -DDEBUG    CMakeFiles/test_builder.dir/test_builder.cc.o  -o ../../bin/test_builder -rdynamic ../src/jsonutil/libjsonutil.a 

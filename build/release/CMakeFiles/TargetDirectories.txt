@@ -1,0 +1,3 @@
+/home/malolk/zoo/jsonutil/build/release/src/jsonutil/CMakeFiles/jsonutil.dir
+/home/malolk/zoo/jsonutil/build/release/src/jsonutil/tests/CMakeFiles/test.dir
+/home/malolk/zoo/jsonutil/build/release/demo/CMakeFiles/test_builder.dir

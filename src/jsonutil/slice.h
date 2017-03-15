@@ -9,7 +9,7 @@ namespace jsonutil {
 class Slice {
  public:
   explicit Slice(const char* t = NULL, int l = 0) : text_(t), len_(l) {
-    if (t == NULL && l > 0 || l < 0) {
+    if (!(t == NULL && l == 0) && !(t && l >= 0)) {
       fprintf(stderr, "%s\n", "Slice constructor error: invalid arguments\n");
       abort();
     }
