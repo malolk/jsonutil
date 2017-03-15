@@ -1056,10 +1056,13 @@ Builder<Value>& operator<<(Builder<Value>& b, const Value& data) {
   Value* p = b.Push();
   p->Reset();
   *p = data;
+  return b;
 }
 
 Builder<Member>& operator<<(Builder<Member>& b, const Member& data) {
   Member* p = b.Push();
   p->Set(data.Key(), data.KLen(), data.Val());
+  return b;
 }
+
 } // namespace jsonutil

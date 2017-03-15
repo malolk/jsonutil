@@ -216,7 +216,8 @@ template<typename T>
 Builder<Value>& operator<<(Builder<Value>& b, const T& data) {
   Value* p = b.Push();
   p->Reset();
-  (*p) << data; 
+  (*p) << data;
+  return b;
 }
 
 template <typename T>
