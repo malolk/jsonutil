@@ -14,7 +14,8 @@ namespace {
 /*=============================Parser Static functions=====================*/
 
 bool IsSpace(const char* p) {
-  return (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n');
+  return (*p == ' ' || *p == '\t' 
+          || *p == '\r' || *p == '\n' || *p == '\0');
 }
 
 void SkipSpace(Slice& s) {
@@ -1023,7 +1024,7 @@ void Member::Move(const char* k, int len, const Value* v) {
   MoveValue(v);
 }
 
-std::string Value::ToString() {
+std::string Value::ToString() const {
   Stack stk;
   ValueToString(stk, this);
   int len = stk.Top();

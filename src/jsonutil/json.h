@@ -90,7 +90,7 @@ class Value {
 
   void Reset(ValueType t = kJSON_NULL);
   ValueType Type() const { return type_; }
-  std::string ToString();
+  std::string ToString() const;
   
   friend Value& operator<<(Value& v, double num);
   friend Value& operator<<(Value& v, const std::string& s);
