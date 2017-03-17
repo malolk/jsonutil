@@ -88,9 +88,9 @@ const char* IsInvalidNumber(Slice& s) {
   return NULL;
 }
 
-Status TranslateHex(Slice& s, uint16_t& buf) {
+JsonStatus TranslateHex(Slice& s, uint16_t& buf) {
 #pragma GCC diagnostic ignored "-Wconversion"
-  if (s.Len() < 4) return kJSON_PARSE_STRING_UNICODE_INVALID_HEX;
+  if (s.Len() < 4) return JsonStatus::kJSON_PARSE_STRING_UNICODE_INVALID_HEX;
   buf = 0;
   for (int i = 0; i < 4; ++i) {
     char chr = *s.Ptr();
@@ -101,17 +101,17 @@ Status TranslateHex(Slice& s, uint16_t& buf) {
     } else if (chr >= 'A' && chr <= 'F') {
       chr = (chr - 'A' + 10);
     } else {
-      return kJSON_PARSE_STRING_UNICODE_INVALID_HEX;
+      return JsonStatus::kJSON_PARSE_STRING_UNICODE_INVALID_HEX;
     }
     buf <<= 4;
     buf |= 0x0F & chr;
     s.Move(1);
   }  
 #pragma GCC diagnostic error "-Wconversion"
-  return kJSON_OK;
+  return JsonStatus::kJSON_OK;
 }
 
-Status EncodeByUTF8(uint32_t& buf, char& num) {
+JsonStatus EncodeByUTF8(uint32_t& buf, char& num) {
   uint32_t ret = 0;
   if (buf <= 0x7F) {
     num = 1;
@@ -132,38 +132,38 @@ Status EncodeByUTF8(uint32_t& buf, char& num) {
     ret |= (0x80 | ((buf >>  6) & 0x3F)) <<  8;
     ret |= (0x80 | ( buf        & 0x3F));
   } else {
-    return kJSON_PARSE_STRING_UNICODE_INVALID_RANGE;
+    return JsonStatus::kJSON_PARSE_STRING_UNICODE_INVALID_RANGE;
   }
   buf = ret;
-  return kJSON_OK;
+  return JsonStatus::kJSON_OK;
 }
 
-Status TranslateUnicodeHex(Slice& s, uint32_t& buf, char& num) {
-  if (s.Len() == 0) return kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR;
+JsonStatus TranslateUnicodeHex(Slice& s, uint32_t& buf, char& num) {
+  if (s.Len() == 0) return JsonStatus::kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR;
   uint16_t high = 0, low = 0;
-  Status ret = TranslateHex(s, high);
-  if (ret != kJSON_OK) return ret;
+  JsonStatus ret = TranslateHex(s, high);
+  if (ret != JsonStatus::kJSON_OK) return ret;
   if (high >= 0xD800 && high <= 0xDBFF) {
     if (s.Len() < 6 || !(s.Ptr()[0] == '\\' && s.Ptr()[1] == 'u')) {
-      return kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE;      
+      return JsonStatus::kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE;      
     }
     s.Move(2);
     ret =  TranslateHex(s, low);
-    if (ret != kJSON_OK) return ret;
+    if (ret != JsonStatus::kJSON_OK) return ret;
     if (low < 0xDC00 || low > 0xDFFF) {
-      return kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE;
+      return JsonStatus::kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE;
     }
     buf = 0x10000 + (high - 0xD800) * 0x400 + (low - 0xDC00);
   } else if (high >= 0xDC00 && high <= 0xDFFF) {
-    return kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE; 
+    return JsonStatus::kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE; 
   } else {
     buf = high;
   }
   return EncodeByUTF8(buf, num);
 }
 
-Status TranslateEscapedChar(Slice& s, uint32_t& buf, char& num) {
-  if (s.Len() == 0) return kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR;
+JsonStatus TranslateEscapedChar(Slice& s, uint32_t& buf, char& num) {
+  if (s.Len() == 0) return JsonStatus::kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR;
   char chr = *s.Ptr();
   s.Move(1);
   num = 1;
@@ -177,36 +177,36 @@ Status TranslateEscapedChar(Slice& s, uint32_t& buf, char& num) {
     case 'r':   buf = '\r'; break;
     case 't':   buf = '\t'; break;
     case 'u':   return TranslateUnicodeHex(s, buf, num);
-    default:    return kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR;
+    default:    return JsonStatus::kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR;
   }
-  return kJSON_OK;
+  return JsonStatus::kJSON_OK;
 }
 
-Status ParseStringInStack(Stack& stk, Slice& s, int& len) {
+JsonStatus ParseStringInStack(Stack& stk, Slice& s, int& len) {
   s.Move(1); // +1 skip the leading mark '"' 
   int head = stk.Top();
-  Status ret;
+  JsonStatus ret;
   uint32_t buf;
   char num = 0;
   while (true) {
-    if (s.Len() == 0) return kJSON_PARSE_STRING_NO_END_MARK;
+    if (s.Len() == 0) return JsonStatus::kJSON_PARSE_STRING_NO_END_MARK;
     buf = *s.Ptr();
     s.Move(1);
     switch (buf) {
       case '\"': len = stk.Top() - head;
-                 return kJSON_OK;
+                 return JsonStatus::kJSON_OK;
       case '\\': buf = 0;
                  ret = TranslateEscapedChar(s, buf, num);
-                 if (ret != kJSON_OK) return ret;
+                 if (ret != JsonStatus::kJSON_OK) return ret;
                  stk.PushUint32(buf, num);
                  break;
       default:   if ((buf & 0xFF) < 0x20) {
-                   return kJSON_PARSE_STRING_INVALID_CHAR;
+                   return JsonStatus::kJSON_PARSE_STRING_INVALID_CHAR;
                  }
                  stk.PushUint32(buf, 1);
     }
   }
-  return kJSON_OK; // never get here.
+  return JsonStatus::kJSON_OK; // never get here.
 }
 
 /* Note: Object member is sorted by key. */
@@ -473,7 +473,7 @@ bool Compare(const Value* lhs, const Value* rhs) {
   }
 }
 
-Status Value::ParseObject(Stack& stk, Slice& s) {
+JsonStatus Value::ParseObject(Stack& stk, Slice& s) {
   type_ = kJSON_OBJECT;
   s.Move(1);
   const char* p = s.Ptr();
@@ -482,10 +482,10 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
     val_.o.m = NULL;
     val_.o.size = 0;
     s.Move(1);
-    return kJSON_OK;
+    return JsonStatus::kJSON_OK;
   }
 
-  Status ret;
+  JsonStatus ret;
   int len;
   int num = 0;
   while (true) {
@@ -493,16 +493,16 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
 
     /* parse the key part */
     p = s.Ptr();
-    if (*p != '\"') return kJSON_PARSE_OBJECT_MISSING_KEY;
+    if (*p != '\"') return JsonStatus::kJSON_PARSE_OBJECT_MISSING_KEY;
     len = 0;
     ret = ParseStringInStack(stk, s, len);
-    if (ret != kJSON_OK) return ret;
+    if (ret != JsonStatus::kJSON_OK) return ret;
     char* sp = CopyWithNull(stk.Pop(len), len);
-    if (sp == NULL) return kJSON_OUT_OF_MEMORY;
+    if (sp == NULL) return JsonStatus::kJSON_OUT_OF_MEMORY;
     SkipSpace(s);
     if (*(s.Ptr()) != ':') {
       free(sp);
-      return kJSON_PARSE_OBJECT_MISSING_COLON;
+      return JsonStatus::kJSON_PARSE_OBJECT_MISSING_COLON;
     }
     s.Move(1); // skip colon
 
@@ -510,10 +510,10 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
     Value* val = reinterpret_cast<Value*>(MallocWithClear(sizeof(Value)));
     if (val == NULL) {
       free(sp);
-      return kJSON_OUT_OF_MEMORY;
+      return JsonStatus::kJSON_OUT_OF_MEMORY;
     }
     SkipSpace(s);
-    if ((ret = val->ParseValue(stk, s)) != kJSON_OK) {
+    if ((ret = val->ParseValue(stk, s)) != JsonStatus::kJSON_OK) {
       free(sp);
       return ret;
     }
@@ -528,7 +528,7 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
       int bytes = num * sizeof(Member);
 #pragma GCC diagnostic error "-Wconversion"
       char* dst = static_cast<char*>(MallocWithClear(bytes));
-      if (dst == NULL) return kJSON_OUT_OF_MEMORY;
+      if (dst == NULL) return JsonStatus::kJSON_OUT_OF_MEMORY;
       memcpy(dst, stk.Pop(bytes), bytes);
       val_.o.m = reinterpret_cast<Member*>(dst);
       s.Move(1);
@@ -537,16 +537,16 @@ Status Value::ParseObject(Stack& stk, Slice& s) {
       s.Move(1);
       SkipSpace(s);
       if(*(s.Ptr()) == '}') {
-        return kJSON_PARSE_OBJECT_INVALID_EXTRA_COMMA;
+        return JsonStatus::kJSON_PARSE_OBJECT_INVALID_EXTRA_COMMA;
       }
     } else {
-      return kJSON_PARSE_OBJECT_MISSING_COMMA_OR_CURLY_BRACKET;
+      return JsonStatus::kJSON_PARSE_OBJECT_MISSING_COMMA_OR_CURLY_BRACKET;
     }
   }
-  return kJSON_OK;
+  return JsonStatus::kJSON_OK;
 }
 
-Status Value::ParseValue(Stack& stk, Slice& s) {
+JsonStatus Value::ParseValue(Stack& stk, Slice& s) {
   switch (*(s.Ptr())) {
     case 'n':  return ParseLiteral(s, 'n');
     case 'f':  return ParseLiteral(s, 'f');
@@ -554,12 +554,12 @@ Status Value::ParseValue(Stack& stk, Slice& s) {
     case '[':  return ParseArray(stk, s);
     case '{':  return ParseObject(stk, s);
     case '\"': return ParseString(stk, s);
-    case '\0': return kJSON_PARSE_EXPECT_VALUE;
+    case '\0': return JsonStatus::kJSON_PARSE_EXPECT_VALUE;
     default:   return ParseNumber(s);
   }
 }
 
-Status Value::ParseLiteral(Slice& s, char c) {
+JsonStatus Value::ParseLiteral(Slice& s, char c) {
   assert(c == 'n' || c == 'f' || c == 't');
   const char* p = s.Ptr();
   bool valide = false;
@@ -581,21 +581,21 @@ Status Value::ParseLiteral(Slice& s, char c) {
 
   if (valide) {
     type_ = type;
-    return kJSON_OK;
+    return JsonStatus::kJSON_OK;
   }
-  return kJSON_PARSE_INVALID_VALUE;
+  return JsonStatus::kJSON_PARSE_INVALID_VALUE;
 }
 
-Status Value::ParseString(Stack& stk, Slice& s) {
+JsonStatus Value::ParseString(Stack& stk, Slice& s) {
   int len = 0;
-  Status ret = ParseStringInStack(stk, s, len);
-  if (ret == kJSON_OK) {
+  JsonStatus ret = ParseStringInStack(stk, s, len);
+  if (ret == JsonStatus::kJSON_OK) {
     SetString(stk.Pop(len), len);
   }
   return ret;
 }
 
-Status Value::ParseArray(Stack& stk, Slice& s) {
+JsonStatus Value::ParseArray(Stack& stk, Slice& s) {
   type_ = kJSON_ARRAY;
   SkipSpace(s);
   s.Move(1);
@@ -604,14 +604,14 @@ Status Value::ParseArray(Stack& stk, Slice& s) {
     val_.a.a = NULL;
     val_.a.size = 0;
     s.Move(1);
-    return kJSON_OK;
+    return JsonStatus::kJSON_OK;
   }
   int num = 0;
   while (true) {
     Value* val = reinterpret_cast<Value*>(MallocWithClear(sizeof(Value)));
-    if (val == NULL) return kJSON_OUT_OF_MEMORY;
-    Status ret = val->ParseValue(stk, s);
-    if (ret != kJSON_OK) {
+    if (val == NULL) return JsonStatus::kJSON_OUT_OF_MEMORY;
+    JsonStatus ret = val->ParseValue(stk, s);
+    if (ret != JsonStatus::kJSON_OK) {
       val->Free();
       free(val);
       return ret;
@@ -624,7 +624,7 @@ Status Value::ParseArray(Stack& stk, Slice& s) {
     if (*p == ']') {
       int bytes = num * static_cast<int>(sizeof(*val));
       char* dst = static_cast<char*>(CopyBytes(stk.Pop(bytes), bytes));
-      if (dst == NULL) return kJSON_OUT_OF_MEMORY;
+      if (dst == NULL) return JsonStatus::kJSON_OUT_OF_MEMORY;
       val_.a.a = reinterpret_cast<Value*>(dst);
       s.Move(1); // skip the ending bracket square
       break;
@@ -632,31 +632,31 @@ Status Value::ParseArray(Stack& stk, Slice& s) {
       s.Move(1);
       SkipSpace(s);
       if (*(s.Ptr()) == ']') {
-        return kJSON_PARSE_ARRAY_INVALID_EXTRA_COMMA;
+        return JsonStatus::kJSON_PARSE_ARRAY_INVALID_EXTRA_COMMA;
       }
     } else {
-      return kJSON_PARSE_ARRAY_MISSING_COMMA;
+      return JsonStatus::kJSON_PARSE_ARRAY_MISSING_COMMA;
     }
   } 
-  return kJSON_OK;
+  return JsonStatus::kJSON_OK;
 }
 
-Status Value::ParseNumber(Slice& s) {
+JsonStatus Value::ParseNumber(Slice& s) {
   const char* p = s.Ptr();
   if (!IsInvalidNumber(s)) {
-    return kJSON_PARSE_INVALID_VALUE;
+    return JsonStatus::kJSON_PARSE_INVALID_VALUE;
   }
 
-  Status ret = kJSON_OK;
+  JsonStatus ret = JsonStatus::kJSON_OK;
   int save_errno = errno;
   errno = 0;
   double num = strtod(p, NULL);
   if (errno) {
     // ERANGE
     if (num == 0) {
-      ret = kJSON_PARSE_NUMBER_UNDERFLOW;
+      ret = JsonStatus::kJSON_PARSE_NUMBER_UNDERFLOW;
     } else {
-      ret = kJSON_PARSE_NUMBER_OVERFLOW;
+      ret = JsonStatus::kJSON_PARSE_NUMBER_OVERFLOW;
     }
   } else {
     type_ = kJSON_NUMBER;
@@ -742,18 +742,18 @@ void Value::FreeOnError(Stack& stk) {
     stk.Free();
 }
 
-Status Value::Parse(const char* text, int len) {
+JsonStatus Value::Parse(const char* text, int len) {
   assert(text != NULL);
   Stack stk;
   Slice s(text, len);
   SkipSpace(s);
-  Status ret = ParseValue(stk, s);
-  if (ret == kJSON_OK) {
+  JsonStatus ret = ParseValue(stk, s);
+  if (ret == JsonStatus::kJSON_OK) {
     if (!CheckSingular(s)) {
-      ret = kJSON_PARSE_ROOT_NOT_SINGULAR;
+      ret = JsonStatus::kJSON_PARSE_ROOT_NOT_SINGULAR;
     }
   }
-  if (ret != kJSON_OK) {
+  if (ret != JsonStatus::kJSON_OK) {
     FreeOnError(stk);
   } else {
     stk.Free();
@@ -1062,32 +1062,6 @@ Builder<Member>& operator<<(Builder<Member>& b, const Member& data) {
   Member* p = b.Push();
   p->Set(data.Key(), data.KLen(), data.Val());
   return b;
-}
-
-const char* status_string[] = { 
-  "Json OK",                                           // kJSON_OK = 0,
-  "Json parse expect value",                           // kJSON_PARSE_EXPECT_VALUE,
-  "Json parse invalid value",                          // kJSON_PARSE_INVALID_VALUE,
-  "Json parse root not singular",                      // kJSON_PARSE_ROOT_NOT_SINGULAR,
-  "Json parse number overflow",                        // kJSON_PARSE_NUMBER_OVERFLOW,
-  "Json parse number underflow",                       // kJSON_PARSE_NUMBER_UNDERFLOW,
-  "Json parse string no end mark",                     // kJSON_PARSE_STRING_NO_END_MARK,
-  "Json parse string escaped invalid char",            // kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR,
-  "Json parse string invalid char",                    // kJSON_PARSE_STRING_INVALID_CHAR,
-  "Json parse string unicode invalid hex",             // kJSON_PARSE_STRING_UNICODE_INVALID_HEX,
-  "Json parse string unicode invalid surrogate",       // kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE,
-  "Json parse string unicode invalid range",           // kJSON_PARSE_STRING_UNICODE_INVALID_RANGE,
-  "Json parse array invalid extra comma",              // kJSON_PARSE_ARRAY_INVALID_EXTRA_COMMA,
-  "Json parse array missing comma",                    // kJSON_PARSE_ARRAY_MISSING_COMMA,
-  "Json parse object missing key",                     // kJSON_PARSE_OBJECT_MISSING_KEY,
-  "Json parse object missing colon",                   // kJSON_PARSE_OBJECT_MISSING_COLON,
-  "Json parse object invalid extra comma",             // kJSON_PARSE_OBJECT_INVALID_EXTRA_COMMA,
-  "Json parse object missing comma or curly bracket",  // kJSON_PARSE_OBJECT_MISSING_COMMA_OR_CURLY_BRACKET,
-  "Json out of memory"                                 // kJSON_OUT_OF_MEMORY
-};
-
-std::string StatusMsg(Status s) {
-  return status_string[static_cast<int>(s)];
 }
 
 } // namespace jsonutil

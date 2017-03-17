@@ -3,6 +3,7 @@
 
 #include "stack.h"
 #include "slice.h"
+#include "json_status.h"
 
 #include <string>
 #include <vector>
@@ -10,30 +11,6 @@
 #include <string.h>
 
 namespace jsonutil {
-typedef enum {
-  kJSON_OK = 0,
-  kJSON_PARSE_EXPECT_VALUE,
-  kJSON_PARSE_INVALID_VALUE,
-  kJSON_PARSE_ROOT_NOT_SINGULAR,
-  kJSON_PARSE_NUMBER_OVERFLOW,
-  kJSON_PARSE_NUMBER_UNDERFLOW,
-  kJSON_PARSE_STRING_NO_END_MARK,
-  kJSON_PARSE_STRING_ESCAPED_INVALID_CHAR,
-  kJSON_PARSE_STRING_INVALID_CHAR,
-  kJSON_PARSE_STRING_UNICODE_INVALID_HEX,
-  kJSON_PARSE_STRING_UNICODE_INVALID_SURROGATE,
-  kJSON_PARSE_STRING_UNICODE_INVALID_RANGE,
-  kJSON_PARSE_ARRAY_INVALID_EXTRA_COMMA,
-  kJSON_PARSE_ARRAY_MISSING_COMMA,
-  kJSON_PARSE_OBJECT_MISSING_KEY,
-  kJSON_PARSE_OBJECT_MISSING_COLON,
-  kJSON_PARSE_OBJECT_INVALID_EXTRA_COMMA,
-  kJSON_PARSE_OBJECT_MISSING_COMMA_OR_CURLY_BRACKET,
-  kJSON_OUT_OF_MEMORY
-} Status;
-
-std::string StatusMsg(Status s);
-
 typedef enum {
   kJSON_NULL, 
   kJSON_FALSE, 
@@ -59,7 +36,7 @@ class Value {
   const Value& operator=(const Value&);
   ~Value();
 
-  Status Parse(const char* text, int len);
+  JsonStatus Parse(const char* text, int len);
 
   bool GetBoolean() const;
   void SetBoolean(bool b);
@@ -111,12 +88,12 @@ class Value {
  private:
   void Free();
   void FreeOnError(Stack& s);
-  Status ParseObject(Stack& stk, Slice& s);
-  Status ParseValue(Stack& stk, Slice& s);
-  Status ParseLiteral(Slice& s, char c);
-  Status ParseString(Stack& stk, Slice& s);
-  Status ParseArray(Stack& stk, Slice& s);
-  Status ParseNumber(Slice& s);
+  JsonStatus ParseObject(Stack& stk, Slice& s);
+  JsonStatus ParseValue(Stack& stk, Slice& s);
+  JsonStatus ParseLiteral(Slice& s, char c);
+  JsonStatus ParseString(Stack& stk, Slice& s);
+  JsonStatus ParseArray(Stack& stk, Slice& s);
+  JsonStatus ParseNumber(Slice& s);
   union {
     struct {
       Member* m;
