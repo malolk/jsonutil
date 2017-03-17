@@ -32,6 +32,8 @@ typedef enum {
   kJSON_OUT_OF_MEMORY
 } Status;
 
+std::string StatusMsg(Status s);
+
 typedef enum {
   kJSON_NULL, 
   kJSON_FALSE, 

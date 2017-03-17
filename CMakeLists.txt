@@ -35,4 +35,3 @@ message(STATUS "include path " ${PROJECT_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/src)
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/src/jsonutil)
-add_subdirectory(${CMAKE_SOURCE_DIR}/demo)

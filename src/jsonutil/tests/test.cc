@@ -500,7 +500,6 @@ void TestSerializeBuilderChainingImpl(const char* func, int line) {
   TestSerializeBuilderChainingImpl(__func__, __LINE__)
 
 void TestSerialize() {
-#if 0
   TestSerializeBuiltin(10.0);
   TestSerializeBuiltin(string(""));
   TestSerializeBuiltin(string("deadbeef"));
@@ -517,12 +516,10 @@ void TestSerialize() {
     {"", "0"}, {" ", "1"}, {"abc", "2"}, {"def", "3"}, {"ghi", "4"}
   };
   TestSerializeMap(ssm);
-#endif
   TestSerializeBuilderChaining();
 }
 
 void Test() {
-#if 0
   TestParseNull();
   TestParseFalse();
   TestParseTrue();
@@ -533,7 +530,6 @@ void Test() {
   TestParseArray();
   TestParseObject();
   TestJsonStringify();
-#endif
   TestSerialize();
 }
 
